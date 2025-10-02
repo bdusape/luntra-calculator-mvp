@@ -542,7 +542,7 @@ def main():
             
             for i, (col, emoji, label) in enumerate(zip(rating_cols, rating_emojis, rating_labels)):
                 with col:
-                if st.button(f"{emoji}\n{label}", key=f"rating_{i}"):
+                    if st.button(f"{emoji}\n{label}", key=f"rating_{i}"):
                         # Store rating
                         rating_data = {
                             "type": "rating",
