@@ -13,6 +13,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+import requests
+import urllib.parse
 
 # Configure page
 st.set_page_config(
@@ -146,6 +148,24 @@ def generate_pdf_report(data):
     buffer.seek(0)
     return buffer
 
+def send_to_webhook(data, webhook_type="analytics"):
+    """Send data to webhook for persistent storage"""
+    try:
+        # Using a simple webhook service - you can replace with your preferred service
+        webhook_urls = {
+            "analytics": "https://webhook.site/your-analytics-webhook",  # Replace with your webhook
+            "feedback": "https://webhook.site/your-feedback-webhook"    # Replace with your webhook
+        }
+        
+        webhook_url = webhook_urls.get(webhook_type)
+        if webhook_url and webhook_url != "https://webhook.site/your-analytics-webhook":
+            response = requests.post(webhook_url, json=data, timeout=5)
+            return response.status_code == 200
+    except Exception as e:
+        # Fail silently in production - don't break user experience
+        pass
+    return False
+
 def track_usage(action, data=None):
     """Track user actions for analytics - Luntra Beta Metrics Capture"""
     analytics_data = {
@@ -162,7 +182,10 @@ def track_usage(action, data=None):
         st.session_state.analytics = []
     st.session_state.analytics.append(analytics_data)
     
-    # In production, this would push to GA4, Mixpanel, or PostHog
+    # Send to persistent storage
+    send_to_webhook(analytics_data, "analytics")
+    
+    # In production, this would also push to GA4, Mixpanel, or PostHog
     # gtag('event', action, data) or mixpanel.track(action, data)
 
 def initialize_analytics():
@@ -559,6 +582,9 @@ def main():
                             st.session_state.feedback_submissions = []
                         st.session_state.feedback_submissions.append(roi_data)
                         
+                        # Send to persistent storage
+                        send_to_webhook(roi_data, "feedback")
+                        
                         track_usage("roi_feedback_submitted", roi_data)
                         st.success("💯 Thanks! This helps us measure LUNTRA's real-world impact.")
                         st.balloons()
@@ -600,6 +626,9 @@ def main():
                     if "feedback_submissions" not in st.session_state:
                         st.session_state.feedback_submissions = []
                     st.session_state.feedback_submissions.append(feedback_data)
+                    
+                    # Send to persistent storage
+                    send_to_webhook(feedback_data, "feedback")
                     
                     # Track the feedback submission
                     track_usage("feedback_submitted", {"type": "feature_request"})
