@@ -147,28 +147,87 @@ def generate_pdf_report(data):
     return buffer
 
 def track_usage(action, data=None):
-    """Track user actions for analytics"""
-    # In production, this would send to analytics service
+    """Track user actions for analytics - Luntra Beta Metrics Capture"""
     analytics_data = {
-        "action": action,
+        "event": action,
         "timestamp": datetime.now().isoformat(),
-        "data": data or {}
+        "session_id": st.session_state.get("session_id", "unknown"),
+        "user_id": st.session_state.get("user_id", "anonymous"),
+        "properties": data or {},
+        "page": "calculator_mvp"
     }
-    # For now, just store in session state for debugging
+    
+    # Store in session state for debugging and export
     if "analytics" not in st.session_state:
         st.session_state.analytics = []
     st.session_state.analytics.append(analytics_data)
+    
+    # In production, this would push to GA4, Mixpanel, or PostHog
+    # gtag('event', action, data) or mixpanel.track(action, data)
+
+def initialize_analytics():
+    """Initialize analytics tracking for new session"""
+    if "session_id" not in st.session_state:
+        st.session_state.session_id = f"sess_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hash(datetime.now()) % 10000}"
+    
+    if "user_id" not in st.session_state:
+        st.session_state.user_id = f"anon_{hash(st.session_state.session_id) % 100000}"
+    
+    if "session_start" not in st.session_state:
+        st.session_state.session_start = datetime.now()
+        track_usage("page_view", {
+            "page_title": "LUNTRA Calculator MVP",
+            "user_agent": "streamlit_app"
+        })
+
+def track_workflow_metrics(workflow_type, status, metrics_data):
+    """Track workflow execution for Product Activation metrics"""
+    if status == "started":
+        track_usage("workflow_run", {
+            "workflow_type": workflow_type,
+            "purchase_price": metrics_data.get("purchase_price"),
+            "model": workflow_type
+        })
+    elif status == "completed":
+        track_usage("workflow_success", {
+            "workflow_type": workflow_type,
+            "purchase_price": metrics_data.get("purchase_price"),
+            "cash_flow": metrics_data.get("cash_flow"),
+            "cap_rate": metrics_data.get("cap_rate"),
+            "time_to_completion": (datetime.now() - st.session_state.session_start).total_seconds()
+        })
+    elif status == "failed":
+        track_usage("workflow_fail", {
+            "workflow_type": workflow_type,
+            "error": metrics_data.get("error", "unknown")
+        })
+
+def track_engagement_metrics():
+    """Track engagement and retention metrics"""
+    # Update workflow run count
+    if "workflow_run_count" not in st.session_state:
+        st.session_state.workflow_run_count = 0
+    st.session_state.workflow_run_count += 1
+    
+    track_usage("active_user", {
+        "session_duration": (datetime.now() - st.session_state.session_start).total_seconds(),
+        "workflow_run_count": st.session_state.workflow_run_count
+    })
 
 def main():
     """Main application entry point"""
-    # Track app load
-    track_usage("app_loaded")
+    # Initialize analytics tracking
+    initialize_analytics()
     
     st.title("🏠 LUNTRA Deal Calculator MVP")
     st.markdown("**60-second deal analysis for house-hack & whole unit models**")
     
-    # Version info
-    st.caption("v1.0.0 | Built for real estate investors | [Give Feedback](#feedback)")
+    # Version info with beta metrics
+    st.caption("v1.0.0 Beta | Built for real estate investors | [Give Feedback](#feedback)")
+    
+    # Beta metrics banner
+    if st.session_state.get("workflow_run_count", 0) == 0:
+        st.info("🚀 **Welcome to LUNTRA Beta!** Help us improve by using the calculator and sharing feedback.")
     
     # Sidebar for configuration
     with st.sidebar:
@@ -177,8 +236,14 @@ def main():
             "Calculation Model",
             ["House-Hack", "Whole Unit"],
             help="Choose your investment strategy",
-            on_change=lambda: track_usage("model_changed", {"model": st.session_state.get("calculation_model")})
+            on_change=lambda: track_usage("model_changed", {"model": calculation_model})
         )
+        
+        # Track workflow start when model is selected
+        if calculation_model:
+            if "current_workflow" not in st.session_state or st.session_state.current_workflow != calculation_model:
+                st.session_state.current_workflow = calculation_model
+                track_workflow_metrics(calculation_model, "started", {"purchase_price": 0})
         
         st.header("Property Details")
         purchase_price = st.number_input(
@@ -321,6 +386,16 @@ def main():
         cap_rate = calculate_cap_rate(noi, purchase_price)
         cash_on_cash = calculate_cash_on_cash_return(annual_cash_flow, total_cash_invested)
         
+        # Track workflow completion with engagement metrics
+        track_engagement_metrics()
+        track_workflow_metrics(calculation_model, "completed", {
+            "purchase_price": purchase_price,
+            "cash_flow": monthly_cash_flow,
+            "cap_rate": cap_rate,
+            "cash_on_cash": cash_on_cash,
+            "total_cash_invested": total_cash_invested
+        })
+        
         # Display key metrics
         metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
         
@@ -434,10 +509,66 @@ def main():
             height=150
         )
         
+        # ROI & Value Feedback (Luntra Beta Key Metric)
+        if st.session_state.get("workflow_run_count", 0) >= 1:
+            with st.expander("💰 Quick Value Assessment - Help Us Measure Impact!", expanded=False):
+                st.write("**Your feedback helps us show the value LUNTRA provides to investors like you.**")
+                
+                roi_col1, roi_col2 = st.columns(2)
+                
+                with roi_col1:
+                    time_saved = st.selectbox(
+                        "How much time did this calculator save you?",
+                        ["Select...", "< 15 minutes", "15-30 minutes", "30-60 minutes", "1-2 hours", "2+ hours"],
+                        key="time_saved"
+                    )
+                    
+                    helped_decision = st.selectbox(
+                        "Did this help you make a faster investment decision?",
+                        ["Select...", "Yes, definitely", "Somewhat helpful", "Not really", "Too early to tell"],
+                        key="helped_decision"
+                    )
+                
+                with roi_col2:
+                    manual_cost = st.selectbox(
+                        "What would you pay someone to do this analysis manually?",
+                        ["Select...", "$25-50", "$50-100", "$100-200", "$200-500", "$500+"],
+                        key="manual_cost"
+                    )
+                    
+                    thumbs_feedback = st.radio(
+                        "Overall, did this save you time?",
+                        ["👍 Yes", "👎 No", "🤷 Unsure"],
+                        key="thumbs_feedback",
+                        horizontal=True
+                    )
+                
+                if st.button("📊 Submit Value Feedback", key="roi_feedback"):
+                    if time_saved != "Select..." or helped_decision != "Select...":
+                        roi_data = {
+                            "type": "roi_feedback",
+                            "time_saved": time_saved,
+                            "helped_decision": helped_decision,
+                            "manual_cost": manual_cost,
+                            "thumbs_feedback": thumbs_feedback,
+                            "workflow_count": st.session_state.get("workflow_run_count", 0),
+                            "timestamp": datetime.now().isoformat()
+                        }
+                        
+                        if "feedback_submissions" not in st.session_state:
+                            st.session_state.feedback_submissions = []
+                        st.session_state.feedback_submissions.append(roi_data)
+                        
+                        track_usage("roi_feedback_submitted", roi_data)
+                        st.success("💯 Thanks! This helps us measure LUNTRA's real-world impact.")
+                        st.balloons()
+                    else:
+                        st.warning("Please answer at least one question to help us improve.")
+        
         # Feedback section
         st.subheader("💬 Feedback & Support")
         
-        feedback_tab1, feedback_tab2, feedback_tab3 = st.tabs(["💡 Suggest", "🐛 Bug Report", "📧 Contact"])
+        feedback_tab1, feedback_tab2, feedback_tab3, feedback_tab4 = st.tabs(["💡 Suggest", "🐛 Bug Report", "📧 Contact", "📈 Beta Metrics"])
         
         with feedback_tab1:
             st.write("**Have an idea to improve this calculator?**")
@@ -569,6 +700,64 @@ def main():
                             st.markdown("**Share LUNTRA Calculator:**")
                             current_url = "https://your-app-url.streamlit.app"  # Will be updated after deployment
                             st.code(f"Check out this real estate calculator: {current_url}")
+        
+        with feedback_tab4:
+            st.write("**LUNTRA Beta Analytics Dashboard**")
+            
+            # Key beta metrics
+            metrics_col1, metrics_col2, metrics_col3 = st.columns(3)
+            
+            with metrics_col1:
+                st.metric(
+                    "Workflows Run", 
+                    st.session_state.get("workflow_run_count", 0),
+                    help="Number of analyses completed this session"
+                )
+            
+            with metrics_col2:
+                session_duration = (datetime.now() - st.session_state.get("session_start", datetime.now())).total_seconds() / 60
+                st.metric(
+                    "Session Time", 
+                    f"{session_duration:.1f} min",
+                    help="Time spent in this session"
+                )
+            
+            with metrics_col3:
+                feedback_count = len(st.session_state.get("feedback_submissions", []))
+                st.metric(
+                    "Feedback Items", 
+                    feedback_count,
+                    help="Feedback submissions this session"
+                )
+            
+            # Session analytics summary
+            st.write("**Session Analytics:**")
+            if "analytics" in st.session_state and st.session_state.analytics:
+                analytics_df = pd.DataFrame(st.session_state.analytics)
+                
+                # Event summary
+                event_counts = analytics_df['event'].value_counts()
+                st.write("**Events Tracked:**")
+                for event, count in event_counts.items():
+                    st.write(f"• {event}: {count}")
+                
+                # Export analytics data
+                if st.button("📥 Export Session Analytics", key="export_analytics"):
+                    analytics_json = analytics_df.to_json(orient='records', indent=2)
+                    st.download_button(
+                        label="Download Analytics JSON",
+                        data=analytics_json,
+                        file_name=f"luntra_analytics_{st.session_state.session_id}.json",
+                        mime="application/json"
+                    )
+            else:
+                st.info("No analytics data captured yet. Use the calculator to generate data.")
+            
+            # Time to First Value (TTFV) tracking
+            if st.session_state.get("workflow_run_count", 0) > 0:
+                ttfv = (datetime.now() - st.session_state.get("session_start", datetime.now())).total_seconds()
+                st.success(f"⚡ **Time to First Value:** {ttfv:.1f} seconds")
+                st.caption("This is a key metric for LUNTRA Beta - how quickly users get value from the tool.")
         
         # PDF Export section
         st.subheader("📄 PDF Export")
