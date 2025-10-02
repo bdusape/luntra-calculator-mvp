@@ -450,17 +450,29 @@ def main():
             
             if st.button("💡 Submit Suggestion", key="suggest_btn"):
                 if feature_request.strip():
-                    # Store feedback (in production, this would go to a database)
+                    # Store feedback with comprehensive context
                     feedback_data = {
                         "type": "feature_request",
                         "content": feature_request,
                         "timestamp": datetime.now().isoformat(),
+                        "user_agent": st.context.headers.get("User-Agent", "Unknown") if hasattr(st.context, 'headers') else "Unknown",
                         "session_data": {
                             "model": calculation_model,
                             "purchase_price": purchase_price,
-                            "monthly_rent": monthly_rent
+                            "monthly_rent": monthly_rent,
+                            "cash_flow": monthly_cash_flow,
+                            "cap_rate": cap_rate
                         }
                     }
+                    
+                    # Store in session state for export
+                    if "feedback_submissions" not in st.session_state:
+                        st.session_state.feedback_submissions = []
+                    st.session_state.feedback_submissions.append(feedback_data)
+                    
+                    # Track the feedback submission
+                    track_usage("feedback_submitted", {"type": "feature_request"})
+                    
                     st.success("✅ Thanks for your suggestion! We'll review it for future updates.")
                     st.balloons()
                 else:
@@ -483,6 +495,28 @@ def main():
             
             if st.button("🐛 Report Bug", key="bug_btn"):
                 if bug_report.strip():
+                    # Store bug report with context
+                    bug_data = {
+                        "type": "bug_report",
+                        "content": bug_report,
+                        "severity": bug_severity,
+                        "timestamp": datetime.now().isoformat(),
+                        "user_agent": st.context.headers.get("User-Agent", "Unknown") if hasattr(st.context, 'headers') else "Unknown",
+                        "session_data": {
+                            "model": calculation_model,
+                            "purchase_price": purchase_price,
+                            "current_url": "app_main_page"
+                        }
+                    }
+                    
+                    # Store in session state
+                    if "feedback_submissions" not in st.session_state:
+                        st.session_state.feedback_submissions = []
+                    st.session_state.feedback_submissions.append(bug_data)
+                    
+                    # Track the bug report
+                    track_usage("bug_reported", {"severity": bug_severity})
+                    
                     st.success("✅ Bug report submitted! Thanks for helping us improve.")
                     st.info("💡 **Tip:** Include your browser and device type for faster fixes.")
                 else:
@@ -508,10 +542,33 @@ def main():
             
             for i, (col, emoji, label) in enumerate(zip(rating_cols, rating_emojis, rating_labels)):
                 with col:
-                    if st.button(f"{emoji}\n{label}", key=f"rating_{i}"):
+                if st.button(f"{emoji}\n{label}", key=f"rating_{i}"):
+                        # Store rating
+                        rating_data = {
+                            "type": "rating",
+                            "rating": i + 1,
+                            "rating_label": label,
+                            "timestamp": datetime.now().isoformat(),
+                            "session_data": {
+                                "model": calculation_model,
+                                "purchase_price": purchase_price,
+                                "cash_flow": monthly_cash_flow
+                            }
+                        }
+                        
+                        if "feedback_submissions" not in st.session_state:
+                            st.session_state.feedback_submissions = []
+                        st.session_state.feedback_submissions.append(rating_data)
+                        
+                        # Track the rating
+                        track_usage("rating_submitted", {"rating": i + 1, "label": label})
+                        
                         st.success(f"Thanks for rating us {emoji}!")
                         if i >= 3:  # Good ratings
                             st.info("💝 Love the app? Share it with fellow investors!")
+                            st.markdown("**Share LUNTRA Calculator:**")
+                            current_url = "https://your-app-url.streamlit.app"  # Will be updated after deployment
+                            st.code(f"Check out this real estate calculator: {current_url}")
         
         # PDF Export section
         st.subheader("📄 PDF Export")
@@ -614,6 +671,22 @@ def main():
             if "analytics" in st.session_state and st.session_state.analytics:
                 st.write("**Session Analytics:**")
                 st.json(st.session_state.analytics[-5:])  # Show last 5 actions
+            
+            # Feedback export (admin feature)
+            if "feedback_submissions" in st.session_state and st.session_state.feedback_submissions:
+                st.write("**Feedback Submissions:**")
+                feedback_df = pd.DataFrame(st.session_state.feedback_submissions)
+                st.dataframe(feedback_df)
+                
+                # Export feedback as JSON
+                if st.button("📥 Export Feedback Data"):
+                    feedback_json = json.dumps(st.session_state.feedback_submissions, indent=2)
+                    st.download_button(
+                        label="Download Feedback JSON",
+                        data=feedback_json,
+                        file_name=f"luntra_feedback_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                        mime="application/json"
+                    )
 
 if __name__ == "__main__":
     main()

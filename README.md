@@ -1,8 +1,21 @@
-# LUNTRA Calculator MVP
+# 🏠 LUNTRA Calculator MVP
 
 **Deal calculator for house-hack & whole unit models with PDF export and financial heuristics**
 
-A 60-second deal analysis tool built with Streamlit for real estate investment calculations. This MVP is part of the LUNTRA paid beta sprint, providing rapid financial analysis for both house-hack and whole unit rental property models.
+A 60-second deal analysis tool built with Streamlit for real estate investment calculations. This MVP provides rapid financial analysis for both house-hack and whole unit rental property models.
+
+## 🚀 **Live App**
+**Deploying to Streamlit Community Cloud...**
+- Repository: https://github.com/bdusape/luntra-calculator-mvp
+- Public URL: [Will be available after deployment]
+
+## 💬 **Feedback Integration**
+Built-in feedback collection system:
+- 💡 Feature suggestions
+- 🐛 Bug reports with severity tracking
+- ⭐ User satisfaction ratings
+- 📊 Usage analytics
+- 📧 Direct contact options
 
 ## Features
 
