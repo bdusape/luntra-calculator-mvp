@@ -146,10 +146,29 @@ def generate_pdf_report(data):
     buffer.seek(0)
     return buffer
 
+def track_usage(action, data=None):
+    """Track user actions for analytics"""
+    # In production, this would send to analytics service
+    analytics_data = {
+        "action": action,
+        "timestamp": datetime.now().isoformat(),
+        "data": data or {}
+    }
+    # For now, just store in session state for debugging
+    if "analytics" not in st.session_state:
+        st.session_state.analytics = []
+    st.session_state.analytics.append(analytics_data)
+
 def main():
     """Main application entry point"""
+    # Track app load
+    track_usage("app_loaded")
+    
     st.title("🏠 LUNTRA Deal Calculator MVP")
     st.markdown("**60-second deal analysis for house-hack & whole unit models**")
+    
+    # Version info
+    st.caption("v1.0.0 | Built for real estate investors | [Give Feedback](#feedback)")
     
     # Sidebar for configuration
     with st.sidebar:
@@ -157,7 +176,8 @@ def main():
         calculation_model = st.selectbox(
             "Calculation Model",
             ["House-Hack", "Whole Unit"],
-            help="Choose your investment strategy"
+            help="Choose your investment strategy",
+            on_change=lambda: track_usage("model_changed", {"model": st.session_state.get("calculation_model")})
         )
         
         st.header("Property Details")
@@ -414,6 +434,85 @@ def main():
             height=150
         )
         
+        # Feedback section
+        st.subheader("💬 Feedback & Support")
+        
+        feedback_tab1, feedback_tab2, feedback_tab3 = st.tabs(["💡 Suggest", "🐛 Bug Report", "📧 Contact"])
+        
+        with feedback_tab1:
+            st.write("**Have an idea to improve this calculator?**")
+            feature_request = st.text_area(
+                "Feature Request",
+                placeholder="What feature would make this more useful for you?",
+                height=80,
+                key="feature_request"
+            )
+            
+            if st.button("💡 Submit Suggestion", key="suggest_btn"):
+                if feature_request.strip():
+                    # Store feedback (in production, this would go to a database)
+                    feedback_data = {
+                        "type": "feature_request",
+                        "content": feature_request,
+                        "timestamp": datetime.now().isoformat(),
+                        "session_data": {
+                            "model": calculation_model,
+                            "purchase_price": purchase_price,
+                            "monthly_rent": monthly_rent
+                        }
+                    }
+                    st.success("✅ Thanks for your suggestion! We'll review it for future updates.")
+                    st.balloons()
+                else:
+                    st.warning("Please enter your suggestion first.")
+        
+        with feedback_tab2:
+            st.write("**Found something that doesn't work right?**")
+            bug_report = st.text_area(
+                "Bug Description",
+                placeholder="Describe what happened and what you expected...",
+                height=80,
+                key="bug_report"
+            )
+            
+            bug_severity = st.selectbox(
+                "Severity",
+                ["Low - Minor inconvenience", "Medium - Affects functionality", "High - App unusable"],
+                key="bug_severity"
+            )
+            
+            if st.button("🐛 Report Bug", key="bug_btn"):
+                if bug_report.strip():
+                    st.success("✅ Bug report submitted! Thanks for helping us improve.")
+                    st.info("💡 **Tip:** Include your browser and device type for faster fixes.")
+                else:
+                    st.warning("Please describe the bug first.")
+        
+        with feedback_tab3:
+            st.write("**Questions? Want to connect?**")
+            
+            contact_cols1, contact_cols2 = st.columns(2)
+            with contact_cols1:
+                if st.button("📧 Email Us", key="email_btn"):
+                    st.info("📮 Send feedback to: feedback@luntra.com")
+                    
+            with contact_cols2:
+                if st.button("💼 LinkedIn", key="linkedin_btn"):
+                    st.info("🔗 Connect with the creator on LinkedIn")
+            
+            # Quick rating
+            st.write("**Quick Rating:**")
+            rating_cols = st.columns(5)
+            rating_emojis = ["😞", "😐", "🙂", "😊", "🤩"]
+            rating_labels = ["Poor", "Fair", "Good", "Great", "Amazing"]
+            
+            for i, (col, emoji, label) in enumerate(zip(rating_cols, rating_emojis, rating_labels)):
+                with col:
+                    if st.button(f"{emoji}\n{label}", key=f"rating_{i}"):
+                        st.success(f"Thanks for rating us {emoji}!")
+                        if i >= 3:  # Good ratings
+                            st.info("💝 Love the app? Share it with fellow investors!")
+        
         # PDF Export section
         st.subheader("📄 PDF Export")
         
@@ -442,6 +541,14 @@ def main():
         
         if st.button("Generate PDF Report", type="primary"):
             try:
+                # Track PDF generation
+                track_usage("pdf_generated", {
+                    "model": calculation_model,
+                    "purchase_price": purchase_price,
+                    "cash_flow": monthly_cash_flow,
+                    "cap_rate": cap_rate
+                })
+                
                 pdf_buffer = generate_pdf_report(pdf_data)
                 st.download_button(
                     label="Download PDF Report",
@@ -452,6 +559,7 @@ def main():
                 st.success("✅ PDF report generated successfully!")
             except Exception as e:
                 st.error(f"❌ Error generating PDF: {str(e)}")
+                track_usage("pdf_error", {"error": str(e)})
         
         # Key Investment Metrics Summary
         st.subheader("📊 Key Metrics")
@@ -501,6 +609,11 @@ def main():
                 "timestamp": datetime.now().isoformat()
             }
             st.json(debug_data)
+            
+            # Analytics data
+            if "analytics" in st.session_state and st.session_state.analytics:
+                st.write("**Session Analytics:**")
+                st.json(st.session_state.analytics[-5:])  # Show last 5 actions
 
 if __name__ == "__main__":
     main()
