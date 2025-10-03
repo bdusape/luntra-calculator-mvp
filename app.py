@@ -237,6 +237,20 @@ def track_engagement_metrics():
         "workflow_run_count": st.session_state.workflow_run_count
     })
 
+def track_payment_funnel(action, additional_data=None):
+    """Track payment conversion funnel events"""
+    payment_data = {
+        "workflow_count": st.session_state.get("workflow_run_count", 0),
+        "session_duration": (datetime.now() - st.session_state.session_start).total_seconds(),
+        "user_segment": "power_user" if st.session_state.get("workflow_run_count", 0) >= 3 else "casual_user",
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    if additional_data:
+        payment_data.update(additional_data)
+    
+    track_usage(f"payment_{action}", payment_data)
+
 def main():
     """Main application entry point"""
     # Initialize analytics tracking
@@ -245,8 +259,16 @@ def main():
     st.title("🏠 LUNTRA Deal Calculator MVP")
     st.markdown("**60-second deal analysis for house-hack & whole unit models**")
     
-    # Version info with beta metrics
-    st.caption("v1.0.0 Beta | Built for real estate investors | [Give Feedback](#feedback)")
+    # Version info with beta metrics and subtle payment hint
+    version_col1, version_col2 = st.columns([3, 1])
+    with version_col1:
+        st.caption("v1.0.0 Beta | Built for real estate investors | [Give Feedback](#feedback)")
+    with version_col2:
+        if st.session_state.get("workflow_run_count", 0) >= 1:
+            st.markdown(
+                '<a href="https://buy.stripe.com/eVq9AU9M99ICctr1qA9EI01" target="_blank" style="text-decoration: none;"><small style="color: #1E88E5; font-weight: bold;">🚀 Upgrade to Pro</small></a>', 
+                unsafe_allow_html=True
+            )
     
     # Beta metrics banner
     if st.session_state.get("workflow_run_count", 0) == 0:
@@ -531,6 +553,81 @@ def main():
             placeholder="Add your analysis notes, concerns, or action items here...",
             height=150
         )
+        
+        # Premium Features & Payment Integration
+        if st.session_state.get("workflow_run_count", 0) >= 2:
+            # Track that user saw the payment offer
+            if "payment_offer_shown" not in st.session_state:
+                st.session_state.payment_offer_shown = True
+                track_payment_funnel("offer_shown", {"trigger_point": "sidebar_expander"})
+            
+            with st.expander("🚀 Unlock Advanced Features - LUNTRA Pro", expanded=False):
+                st.write("**Love the calculator? Get access to advanced features!**")
+                
+                # Show premium features
+                st.markdown("""
+                **🔥 LUNTRA Pro Features:**
+                • 📊 **Advanced Analytics Dashboard** - Track deal history & performance
+                • 📈 **Market Comparison Tools** - Compare deals across markets
+                • 🤖 **AI Deal Scoring** - Get intelligent deal recommendations
+                • 📱 **Mobile App Access** - Calculate on-the-go
+                • 📧 **Email Reports** - Share analyses with partners
+                • 🔄 **Unlimited PDF Exports** - Professional reports
+                • ☁️ **Cloud Sync** - Access your deals anywhere
+                • 🎯 **Deal Alerts** - Get notified of matching opportunities
+                """)
+                
+                # Payment section
+                payment_col1, payment_col2 = st.columns([2, 1])
+                
+                with payment_col1:
+                    st.success("**Special Launch Price: $29/month** (normally $49)")
+                    st.caption("✅ 7-day free trial • ✅ Cancel anytime • ✅ 30-day money-back guarantee")
+                    
+                with payment_col2:
+                    # Stripe payment button with click tracking
+                    if st.button("🚀 Upgrade to Pro", key="stripe_button_sidebar", type="primary"):
+                        track_payment_funnel("button_clicked", {"location": "sidebar_expander"})
+                        st.markdown("""
+                        <script>
+                        window.open('https://buy.stripe.com/eVq9AU9M99ICctr1qA9EI01', '_blank');
+                        </script>
+                        """, unsafe_allow_html=True)
+                        st.success("🚀 Redirecting to secure checkout...")
+                    
+                    # Alternative: Direct link with analytics
+                    st.markdown("""
+                    <a href="https://buy.stripe.com/eVq9AU9M99ICctr1qA9EI01" target="_blank" onclick="gtag('event', 'payment_link_clicked', {'location': 'sidebar_direct'})">
+                        <button style="
+                            background: linear-gradient(45deg, #1E88E5, #43A047);
+                            color: white;
+                            padding: 12px 24px;
+                            border: none;
+                            border-radius: 8px;
+                            font-weight: bold;
+                            font-size: 16px;
+                            cursor: pointer;
+                            width: 100%;
+                            transition: all 0.3s ease;
+                            margin-top: 10px;
+                        " 
+                        onmouseover="this.style.transform='scale(1.05)'" 
+                        onmouseout="this.style.transform='scale(1)'">
+                            💳 Direct Checkout
+                        </button>
+                    </a>
+                    """, unsafe_allow_html=True)
+                
+                # Track payment interest
+                if st.button("💡 I'm Interested - Tell Me More", key="payment_interest"):
+                    track_usage("payment_interest", {
+                        "workflow_count": st.session_state.get("workflow_run_count", 0),
+                        "session_duration": (datetime.now() - st.session_state.session_start).total_seconds(),
+                        "last_cash_flow": monthly_cash_flow,
+                        "model_used": calculation_model
+                    })
+                    st.success("🎉 Thanks for your interest! Click 'Upgrade to Pro' above to get started.")
+                    st.info("💡 **Pro Tip:** Your first week is completely free - perfect for testing on real deals!")
         
         # ROI & Value Feedback (Luntra Beta Key Metric)
         if st.session_state.get("workflow_run_count", 0) >= 1:
@@ -850,6 +947,44 @@ def main():
         """
         
         st.markdown(metrics_summary)
+        
+        # Payment CTA for engaged users
+        if st.session_state.get("workflow_run_count", 0) >= 3:
+            # Track high-engagement payment offer
+            if "payment_cta_shown" not in st.session_state:
+                st.session_state.payment_cta_shown = True
+                track_payment_funnel("cta_shown", {"trigger_point": "main_cta_3_workflows"})
+            
+            st.markdown("---")
+            st.markdown("### 🎯 Ready to Level Up Your Investing Game?")
+            
+            cta_col1, cta_col2, cta_col3 = st.columns([1, 2, 1])
+            with cta_col2:
+                st.markdown("""
+                <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 10px; margin: 10px 0;">
+                    <h4 style="margin: 0; color: #333;">🚀 You've run 3+ analyses!</h4>
+                    <p style="margin: 10px 0; color: #666;">Join 500+ investors using LUNTRA Pro</p>
+                    <a href="https://buy.stripe.com/eVq9AU9M99ICctr1qA9EI01" target="_blank" style="text-decoration: none;" onclick="track_payment_click('main_cta')">
+                        <button style="
+                            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+                            color: white;
+                            padding: 15px 30px;
+                            border: none;
+                            border-radius: 25px;
+                            font-weight: bold;
+                            font-size: 18px;
+                            cursor: pointer;
+                            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                            transition: all 0.3s ease;
+                        " 
+                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(0,0,0,0.3)'" 
+                        onmouseout="this.style.transform='translateY(0px)'; this.style.boxShadow='0 4px 15px rgba(0,0,0,0.2)'">
+                            ⚡ Upgrade Now - $29/mo
+                        </button>
+                    </a>
+                    <p style="font-size: 12px; color: #888; margin: 10px 0 0 0;">7-day free trial • Cancel anytime</p>
+                </div>
+                """, unsafe_allow_html=True)
         
         # Quick actions
         st.subheader("Quick Actions")
